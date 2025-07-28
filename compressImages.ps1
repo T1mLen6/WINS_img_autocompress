@@ -1,39 +1,24 @@
 Add-Type -AssemblyName System.Drawing
 
-function Compress-To-TargetSize { 
+function Compress-FixedQuality {
     param (
         [string]$inputFile,
-        [int]$targetKB,
+        [int]$quality,
         [string]$outputFile
     )
 
     $img = [System.Drawing.Image]::FromFile($inputFile)
     $encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object {$_.MimeType -eq 'image/jpeg'}
     $params = New-Object System.Drawing.Imaging.EncoderParameters(1)
+    $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, $quality)
 
-    $quality = 90
-    while ($true) {
-        $ms = New-Object System.IO.MemoryStream
-        $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, $quality)
-        $img.Save($ms, $encoder, $params)
-
-        $sizeKB = [math]::Round($ms.Length / 1KB, 0)
-
-        if ($sizeKB -le $targetKB -or $quality -le 5) {
-            $ms.Position = 0
-            $fs = [System.IO.File]::Create($outputFile)
-            $ms.CopyTo($fs)
-            $fs.Close()
-            Write-Host "Saved"
-            break
-        }
-
-        $quality -= 5
-    }
+    $img.Save($outputFile, $encoder, $params)
     $img.Dispose()
+
+    Write-Host "Saved $outputFile (quality=$quality)"
 }
 
-# --- Folder Watcher ---
+# --- Folder Paths ---
 $watcher = New-Object System.IO.FileSystemWatcher
 $watcher.Path = "C:\Users\Qcells\Documents\WINS_img_autocompress\stain_samples"   # <-- Change to your folder
 $watcher.Filter = "*.*"
@@ -56,21 +41,21 @@ Register-ObjectEvent $watcher Created -Action {
     $file = $Event.SourceEventArgs.FullPath
 
     # Convert non-JPG to JPG
-    $ext = [System.IO.Path]::GetExtension($file).ToLower()
-    if ($ext -ne ".jpg" -and $ext -ne ".jpeg") {
-        $img = [System.Drawing.Image]::FromFile($file)
-        $tempFile = $file + ".jpg"
-        $img.Save($tempFile, [System.Drawing.Imaging.ImageFormat]::Jpeg)
-        $img.Dispose()
-        $file = $tempFile
-    }
+    #$ext = [System.IO.Path]::GetExtension($file).ToLower()
+   # if ($ext -ne ".jpg" -and $ext -ne ".jpeg") {
+    #    $img = [System.Drawing.Image]::FromFile($file)
+    #    $tempFile = $file + ".jpg"
+    #    $img.Save($tempFile, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+    #    $img.Dispose()
+    #    $file = $tempFile
+    #}
 
     $name = [System.IO.Path]::GetFileNameWithoutExtension($file)
 
-    Compress-To-TargetSize $file 300 "$folder300\$name.jpg"
-    Compress-To-TargetSize $file 500 "$folder500\$name.jpg"
-    Compress-To-TargetSize $file 700 "$folder700\$name.jpg"
+    Compress-FixedQuality $file 10 "$folder300\$name_300kb.jpg"   # ~300 KB
+    Compress-FixedQuality $file 15 "$folder500\$name_500kb.jpg"   # ~500 KB
+    Compress-FixedQuality $file 20 "$folder700\$name_700kb.jpg"   # ~700 KB
 }
 
-Write-Host "Watching folder... Press Ctrl+C to stop."
+Write-Host "Watching folder... Press Ctrl+C to stop"
 while ($true) { Start-Sleep -Seconds 1 }
