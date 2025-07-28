@@ -1,6 +1,6 @@
 Add-Type -AssemblyName System.Drawing
 
-function Compress-To-TargetSize {
+function Compress-To-TargetSize { 
     param (
         [string]$inputFile,
         [int]$targetKB,
@@ -24,7 +24,7 @@ function Compress-To-TargetSize {
             $fs = [System.IO.File]::Create($outputFile)
             $ms.CopyTo($fs)
             $fs.Close()
-            Write-Host "✔ Saved $outputFile ($sizeKB KB, quality=$quality)"
+            Write-Host "Saved"
             break
         }
 
@@ -35,16 +35,27 @@ function Compress-To-TargetSize {
 
 # --- Folder Watcher ---
 $watcher = New-Object System.IO.FileSystemWatcher
-$watcher.Path = "C:\Path\To\Images"   # <-- Change to your folder
+$watcher.Path = "C:\Users\Qcells\Documents\WINS_img_autocompress\stain_samples"   # <-- Change to your folder
 $watcher.Filter = "*.*"
 $watcher.IncludeSubdirectories = $false
 $watcher.EnableRaisingEvents = $true
+
+# Create output folders automatically
+$parent = Split-Path $watcher.Path -Parent
+$baseName = Split-Path $watcher.Path -Leaf
+$folder300 = Join-Path $parent ($baseName + "_300kb")
+$folder500 = Join-Path $parent ($baseName + "_500kb")
+$folder700 = Join-Path $parent ($baseName + "_700kb")
+
+foreach ($folder in @($folder300, $folder500, $folder700)) {
+    if (!(Test-Path $folder)) { New-Item -ItemType Directory -Path $folder | Out-Null }
+}
 
 Register-ObjectEvent $watcher Created -Action {
     Start-Sleep -Seconds 1
     $file = $Event.SourceEventArgs.FullPath
 
-    # Convert non-JPG files to JPG temp file
+    # Convert non-JPG to JPG
     $ext = [System.IO.Path]::GetExtension($file).ToLower()
     if ($ext -ne ".jpg" -and $ext -ne ".jpeg") {
         $img = [System.Drawing.Image]::FromFile($file)
@@ -54,12 +65,11 @@ Register-ObjectEvent $watcher Created -Action {
         $file = $tempFile
     }
 
-    $base = [System.IO.Path]::GetFileNameWithoutExtension($file)
-    $dir = [System.IO.Path]::GetDirectoryName($file)
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($file)
 
-    Compress-To-TargetSize $file 700 "$dir\$base`_700kb.jpg"
-    Compress-To-TargetSize $file 500 "$dir\$base`_500kb.jpg"
-    Compress-To-TargetSize $file 300 "$dir\$base`_300kb.jpg"
+    Compress-To-TargetSize $file 300 "$folder300\$name.jpg"
+    Compress-To-TargetSize $file 500 "$folder500\$name.jpg"
+    Compress-To-TargetSize $file 700 "$folder700\$name.jpg"
 }
 
 Write-Host "Watching folder... Press Ctrl+C to stop."
