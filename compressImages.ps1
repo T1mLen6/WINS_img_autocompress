@@ -1,21 +1,34 @@
 Add-Type -AssemblyName System.Drawing
 
-function Compress-FixedQuality {
+function Resize-And-Compress {
     param (
         [string]$inputFile,
+        [int]$targetWidth,
         [int]$quality,
         [string]$outputFile
     )
 
-    $img = [System.Drawing.Image]::FromFile($inputFile)
+    $original = [System.Drawing.Image]::FromFile($inputFile)
+
+    # Maintain aspect ratio
+    $ratio = $original.Width / $original.Height
+    $targetHeight = [math]::Round($targetWidth / $ratio)
+
+    $bitmap = New-Object System.Drawing.Bitmap $targetWidth, $targetHeight
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.InterpolationMode = "HighQualityBicubic"
+    $graphics.DrawImage($original, 0, 0, $targetWidth, $targetHeight)
+    $graphics.Dispose()
+
     $encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object {$_.MimeType -eq 'image/jpeg'}
     $params = New-Object System.Drawing.Imaging.EncoderParameters(1)
     $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, $quality)
 
-    $img.Save($outputFile, $encoder, $params)
-    $img.Dispose()
+    $bitmap.Save($outputFile, $encoder, $params)
+    $bitmap.Dispose()
+    $original.Dispose()
 
-    Write-Host "Saved $outputFile (quality=$quality)"
+    Write-Host "Saved $outputFile (Width=$targetWidth, Quality=$quality)"
 }
 
 # --- Folder Paths ---
@@ -52,9 +65,9 @@ Register-ObjectEvent $watcher Created -Action {
 
     $name = [System.IO.Path]::GetFileNameWithoutExtension($file)
 
-    Compress-FixedQuality $file 10 "$folder300\$name_300kb.jpg"   # ~300 KB
-    Compress-FixedQuality $file 15 "$folder500\$name_500kb.jpg"   # ~500 KB
-    Compress-FixedQuality $file 20 "$folder700\$name_700kb.jpg"   # ~700 KB
+    Resize-And-Compress $file 1900 86 "$folder300\$name 300kb.jpg"   # ~300 KB
+    Resize-And-Compress $file 2200 89 "$folder500\$name 500kb.jpg"   # ~500 KB
+    Resize-And-Compress $file 2400 91 "$folder700\$name 700kb.jpg"   # ~700 KB
 }
 
 Write-Host "Watching folder... Press Ctrl+C to stop"
